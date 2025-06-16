@@ -1,13 +1,37 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import AuthPage from '../components/auth/AuthPage';
+import DashboardLayout from '../components/layout/DashboardLayout';
+import DashboardHome from '../components/dashboard/DashboardHome';
+import EmployeesPage from '../components/employees/EmployeesPage';
+import SalarySlipsPage from '../components/salary/SalarySlipsPage';
 
 const Index = () => {
+  const { isAuthenticated } = useAuth();
+  const [currentPage, setCurrentPage] = useState('dashboard');
+
+  if (!isAuthenticated) {
+    return <AuthPage />;
+  }
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'dashboard':
+        return <DashboardHome />;
+      case 'employees':
+        return <EmployeesPage />;
+      case 'salary-slips':
+        return <SalarySlipsPage />;
+      default:
+        return <DashboardHome />;
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <DashboardLayout currentPage={currentPage} onNavigate={setCurrentPage}>
+      {renderPage()}
+    </DashboardLayout>
   );
 };
 

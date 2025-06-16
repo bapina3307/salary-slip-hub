@@ -7,60 +7,68 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { SalarySlip } from '../../types';
+import { SalarySlip, Employee } from '../../types';
 import { Upload, Download, FileText, Calendar, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../../integrations/supabase/client';
 
 const SalarySlipsPage: React.FC = () => {
   const { employee } = useAuth();
   const [salarySlips, setSalarySlips] = useState<SalarySlip[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredSlips, setFilteredSlips] = useState<SalarySlip[]>([]);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    // Mock salary slip data - in real app, this would be fetched from your Node.js API
-    const mockSlips: SalarySlip[] = [
-      {
-        id: '1',
-        employeeId: '2',
-        month: 'November',
-        year: 2024,
-        fileName: 'john_doe_november_2024.pdf',
-        uploadDate: '2024-12-01',
-        fileUrl: '#'
-      },
-      {
-        id: '2',
-        employeeId: '2',
-        month: 'October',
-        year: 2024,
-        fileName: 'john_doe_october_2024.pdf',
-        uploadDate: '2024-11-01',
-        fileUrl: '#'
-      },
-      {
-        id: '3',
-        employeeId: '3',
-        month: 'November',
-        year: 2024,
-        fileName: 'jane_smith_november_2024.pdf',
-        uploadDate: '2024-12-01',
-        fileUrl: '#'
-      }
-    ];
-
-    setSalarySlips(mockSlips);
-    
-    // Filter slips based on user role
-    if (employee?.role === 'admin') {
-      setFilteredSlips(mockSlips);
-    } else {
-      setFilteredSlips(mockSlips.filter(slip => slip.employeeId === employee?.id));
-    }
+    fetchData();
   }, [employee]);
+
+  const fetchData = async () => {
+    try {
+      // Fetch salary slips
+      const { data: slipsData, error: slipsError } = await supabase
+        .from('salary_slips')
+        .select(`
+          *,
+          profiles!salary_slips_employee_id_fkey(name, email)
+        `)
+        .order('year', { ascending: false })
+        .order('month', { ascending: false });
+
+      if (slipsError) throw slipsError;
+
+      // Fetch employees (for admin)
+      if (employee?.role === 'admin') {
+        const { data: employeesData, error: employeesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'employee')
+          .order('name');
+
+        if (employeesError) throw employeesError;
+        setEmployees(employeesData || []);
+      }
+
+      setSalarySlips(slipsData || []);
+      
+      // Filter slips based on user role
+      if (employee?.role === 'admin') {
+        setFilteredSlips(slipsData || []);
+      } else {
+        setFilteredSlips((slipsData || []).filter(slip => slip.employee_id === employee?.id));
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,39 +79,87 @@ const SalarySlipsPage: React.FC = () => {
     }
   };
 
-  const handleUploadSubmit = () => {
+  const handleUploadSubmit = async () => {
     if (!uploadFile || !selectedMonth || !selectedYear || !selectedEmployee) {
       toast.error('Please fill all fields and select a file');
       return;
     }
 
-    // Mock upload - in real app, this would upload to your Node.js backend
-    const newSlip: SalarySlip = {
-      id: Date.now().toString(),
-      employeeId: selectedEmployee,
-      month: selectedMonth,
-      year: parseInt(selectedYear),
-      fileName: uploadFile.name,
-      uploadDate: new Date().toISOString().split('T')[0],
-      fileUrl: '#'
-    };
+    setUploading(true);
 
-    setSalarySlips(prev => [...prev, newSlip]);
-    setFilteredSlips(prev => [...prev, newSlip]);
-    
-    // Reset form
-    setUploadFile(null);
-    setSelectedMonth('');
-    setSelectedYear('');
-    setSelectedEmployee('');
-    
-    toast.success('Salary slip uploaded successfully!');
+    try {
+      // Create a unique file path
+      const fileExt = uploadFile.name.split('.').pop();
+      const fileName = `${selectedEmployee}/${selectedYear}/${selectedMonth}.${fileExt}`;
+      
+      // Upload file to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('salary-slips')
+        .upload(fileName, uploadFile);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('salary-slips')
+        .getPublicUrl(fileName);
+
+      // Insert salary slip record
+      const { error: insertError } = await supabase
+        .from('salary_slips')
+        .insert({
+          employee_id: selectedEmployee,
+          month: selectedMonth,
+          year: parseInt(selectedYear),
+          file_name: uploadFile.name,
+          file_url: publicUrl,
+          file_size: uploadFile.size,
+          uploaded_by: employee?.id
+        });
+
+      if (insertError) throw insertError;
+
+      toast.success('Salary slip uploaded successfully!');
+      
+      // Reset form
+      setUploadFile(null);
+      setSelectedMonth('');
+      setSelectedYear('');
+      setSelectedEmployee('');
+      
+      // Refresh data
+      fetchData();
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload salary slip');
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleDownload = (slip: SalarySlip) => {
-    // Mock download - in real app, this would download from your Node.js backend
-    toast.success(`Downloading ${slip.fileName}`);
-    console.log('Downloading salary slip:', slip);
+  const handleDownload = async (slip: SalarySlip) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('salary-slips')
+        .download(slip.file_url.split('/').pop() || '');
+
+      if (error) throw error;
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = slip.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Downloaded ${slip.file_name}`);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download file');
+    }
   };
 
   const months = [
@@ -113,12 +169,14 @@ const SalarySlipsPage: React.FC = () => {
 
   const years = ['2024', '2023', '2022'];
 
-  const mockEmployees = [
-    { id: '2', name: 'John Doe' },
-    { id: '3', name: 'Jane Smith' },
-    {id: '4', name: 'Mike Johnson' },
-    { id: '5', name: 'Sarah Wilson' }
-  ];
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading salary slips...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -153,7 +211,7 @@ const SalarySlipsPage: React.FC = () => {
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockEmployees.map(emp => (
+                    {employees.map(emp => (
                       <SelectItem key={emp.id} value={emp.id}>
                         {emp.name}
                       </SelectItem>
@@ -210,9 +268,13 @@ const SalarySlipsPage: React.FC = () => {
               )}
             </div>
             
-            <Button onClick={handleUploadSubmit} className="flex items-center gap-2">
+            <Button 
+              onClick={handleUploadSubmit} 
+              className="flex items-center gap-2"
+              disabled={uploading}
+            >
               <Upload className="h-4 w-4" />
-              Upload Salary Slip
+              {uploading ? 'Uploading...' : 'Upload Salary Slip'}
             </Button>
           </CardContent>
         </Card>
@@ -245,7 +307,7 @@ const SalarySlipsPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredSlips.map((slip) => {
-                  const employeeName = mockEmployees.find(emp => emp.id === slip.employeeId)?.name || 'Unknown';
+                  const employeeName = (slip as any).profiles?.name || 'Unknown';
                   
                   return (
                     <Card key={slip.id} className="hover:shadow-md transition-shadow">
@@ -265,8 +327,8 @@ const SalarySlipsPage: React.FC = () => {
                         )}
                         
                         <div className="text-sm text-gray-600">
-                          <p><strong>File:</strong> {slip.fileName}</p>
-                          <p><strong>Uploaded:</strong> {new Date(slip.uploadDate).toLocaleDateString()}</p>
+                          <p><strong>File:</strong> {slip.file_name}</p>
+                          <p><strong>Uploaded:</strong> {new Date(slip.upload_date).toLocaleDateString()}</p>
                         </div>
                         
                         <Button 

@@ -1,75 +1,128 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Employee } from '../types';
+import { supabase } from '../integrations/supabase/client';
+import { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   employee: Employee | null;
+  user: User | null;
+  session: Session | null;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
+  signup: (email: string, password: string, name: string, role?: 'admin' | 'employee') => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
-    // Check for stored auth data on app load
-    const token = localStorage.getItem('token');
-    const employeeData = localStorage.getItem('employee');
-    
-    if (token && employeeData) {
-      setEmployee(JSON.parse(employeeData));
-      setIsAuthenticated(true);
-    }
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Fetch profile data
+          const profile = await fetchProfile(session.user.id);
+          if (profile) {
+            setEmployee(profile);
+            setIsAuthenticated(true);
+          }
+        } else {
+          setEmployee(null);
+          setIsAuthenticated(false);
+        }
+        setLoading(false);
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchProfile(session.user.id).then(profile => {
+          if (profile) {
+            setEmployee(profile);
+            setSession(session);
+            setUser(session.user);
+            setIsAuthenticated(true);
+          }
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Mock API call - in real app, this would call your Node.js backend
-      const mockEmployees = [
-        { id: '1', email: 'admin@company.com', name: 'Admin User', role: 'admin' as const },
-        { id: '2', email: 'john@company.com', name: 'John Doe', role: 'employee' as const, department: 'IT', position: 'Developer' },
-        { id: '3', email: 'jane@company.com', name: 'Jane Smith', role: 'employee' as const, department: 'HR', position: 'Manager' }
-      ];
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      const foundEmployee = mockEmployees.find(emp => emp.email === email);
-      
-      if (foundEmployee && password === 'password123') {
-        const token = 'mock-jwt-token-' + Date.now();
-        localStorage.setItem('token', token);
-        localStorage.setItem('employee', JSON.stringify(foundEmployee));
-        setEmployee(foundEmployee);
-        setIsAuthenticated(true);
-        return true;
+      if (error) {
+        console.error('Login error:', error);
+        return false;
       }
-      return false;
+
+      return true;
     } catch (error) {
       console.error('Login error:', error);
       return false;
     }
   };
 
-  const signup = async (email: string, password: string, name: string): Promise<boolean> => {
+  const signup = async (email: string, password: string, name: string, role: 'admin' | 'employee' = 'employee'): Promise<boolean> => {
     try {
-      // Mock API call - in real app, this would call your Node.js backend
-      const newEmployee = {
-        id: Date.now().toString(),
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.auth.signUp({
         email,
-        name,
-        role: 'employee' as const,
-        department: 'General',
-        position: 'Employee'
-      };
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            name,
+            role
+          }
+        }
+      });
 
-      const token = 'mock-jwt-token-' + Date.now();
-      localStorage.setItem('token', token);
-      localStorage.setItem('employee', JSON.stringify(newEmployee));
-      setEmployee(newEmployee);
-      setIsAuthenticated(true);
+      if (error) {
+        console.error('Signup error:', error);
+        return false;
+      }
+
       return true;
     } catch (error) {
       console.error('Signup error:', error);
@@ -77,15 +130,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('employee');
-    setEmployee(null);
-    setIsAuthenticated(false);
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setEmployee(null);
+      setUser(null);
+      setSession(null);
+      setIsAuthenticated(false);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ employee, login, signup, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ 
+      employee, 
+      user, 
+      session, 
+      login, 
+      signup, 
+      logout, 
+      isAuthenticated, 
+      loading 
+    }}>
       {children}
     </AuthContext.Provider>
   );

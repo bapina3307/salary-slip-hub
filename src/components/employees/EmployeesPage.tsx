@@ -7,66 +7,38 @@ import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Employee } from '../../types';
 import { Search, Plus, Mail, Building, Calendar } from 'lucide-react';
+import { supabase } from '../../integrations/supabase/client';
+import { toast } from 'sonner';
 
 const EmployeesPage: React.FC = () => {
   const { employee: currentUser } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock employee data - in real app, this would be fetched from your Node.js API
-    const mockEmployees: Employee[] = [
-      {
-        id: '1',
-        email: 'admin@company.com',
-        name: 'Admin User',
-        role: 'admin',
-        department: 'Management',
-        position: 'System Administrator',
-        joinDate: '2023-01-15'
-      },
-      {
-        id: '2',
-        email: 'john@company.com',
-        name: 'John Doe',
-        role: 'employee',
-        department: 'IT',
-        position: 'Senior Developer',
-        joinDate: '2023-03-20'
-      },
-      {
-        id: '3',
-        email: 'jane@company.com',
-        name: 'Jane Smith',
-        role: 'employee',
-        department: 'HR',
-        position: 'HR Manager',
-        joinDate: '2023-02-10'
-      },
-      {
-        id: '4',
-        email: 'mike@company.com',
-        name: 'Mike Johnson',
-        role: 'employee',
-        department: 'Finance',
-        position: 'Financial Analyst',
-        joinDate: '2023-04-05'
-      },
-      {
-        id: '5',
-        email: 'sarah@company.com',
-        name: 'Sarah Wilson',
-        role: 'employee',
-        department: 'Marketing',
-        position: 'Marketing Specialist',
-        joinDate: '2023-05-12'
-      }
-    ];
-
-    setEmployees(mockEmployees);
-    setFilteredEmployees(mockEmployees);
+    fetchEmployees();
   }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      setEmployees(data || []);
+      setFilteredEmployees(data || []);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('Failed to load employees');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const filtered = employees.filter(emp =>
@@ -83,6 +55,15 @@ const EmployeesPage: React.FC = () => {
       <div className="text-center py-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
         <p className="text-gray-600">You don't have permission to view this page.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading employees...</p>
       </div>
     );
   }
@@ -153,10 +134,10 @@ const EmployeesPage: React.FC = () => {
                   </div>
                 )}
                 
-                {emp.joinDate && (
+                {emp.join_date && (
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="h-4 w-4" />
-                    Joined: {new Date(emp.joinDate).toLocaleDateString()}
+                    Joined: {new Date(emp.join_date).toLocaleDateString()}
                   </div>
                 )}
                 

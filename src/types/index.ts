@@ -1,4 +1,3 @@
-
 export interface Employee {
   id: string;
   email: string;
@@ -21,6 +20,10 @@ export interface EmployeeData {
   status: 'active' | 'inactive';
   created_at?: string;
   updated_at?: string;
+  profiles?: {
+    name?: string;
+    email?: string;
+  };
 }
 
 export interface SalarySlip {
@@ -34,6 +37,7 @@ export interface SalarySlip {
   upload_date: string;
   uploaded_by?: string;
   created_at?: string;
+  file_path?: string; // Added for storage relative path
 }
 
 export interface AuthResponse {

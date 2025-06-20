@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { CalendarDays, FileText, Users, Building } from 'lucide-react';
 import { supabase } from '../../integrations/supabase/client';
+import { SalarySlip } from '../../types';
 
 const DashboardHome: React.FC = () => {
   const { employee } = useAuth();
@@ -15,29 +15,137 @@ const DashboardHome: React.FC = () => {
     departments: 0
   });
   const [loading, setLoading] = useState(true);
+  const [currentMonth, setCurrentMonth] = useState('');
+  const [currentYear, setCurrentYear] = useState('');
+  const [mySalarySlips, setMySalarySlips] = useState<SalarySlip[]>([]);
+
+  // Add state to store signed URLs for salary slips
+  const [signedUrls, setSignedUrls] = useState<{ [id: string]: string }>({});
 
   useEffect(() => {
     fetchStats();
   }, [employee]);
 
+  useEffect(() => {
+    // Get the latest month and year from salary_slips
+    const fetchCurrentPeriod = async () => {
+      const { data, error } = await supabase
+        .from('salary_slips')
+        .select('month, year')
+        .order('year', { ascending: false })
+        .order('month', { ascending: false })
+        .limit(1);
+      if (data && data.length > 0) {
+        console.log('Fetched current period:', data[0]);
+        setCurrentMonth(data[0].month);
+        setCurrentYear(data[0].year.toString());
+      } else {
+        // fallback to current system month/year if no data
+        const now = new Date();
+        setCurrentMonth(now.toLocaleString('default', { month: 'long' }));
+        setCurrentYear(now.getFullYear().toString());
+      }
+    };
+    fetchCurrentPeriod();
+  }, []);
+
+  // Month helpers
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // State for filter
+  const [filterYear, setFilterYear] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
+
+  // Fetch salary slips for the logged-in employee using employee_id from profile
+  // useEffect(() => {
+  //   const fetchMySalarySlips = async () => {
+  //     if (employee?.role === 'employee') {
+  //       // Get employee_id from profile
+  //       const { data: profile, error: profileError } = await supabase
+  //         .from('profiles')
+  //         .select('employee_id')
+  //         .eq('id', employee.id)
+  //         .single();
+  //       if (!profileError && profile?.employee_id) {
+  //         setProfileEmployeeId(profile.employee_id);
+  //         // Fetch salary slips for this employee_id
+  //         const { data, error } = await supabase
+  //           .from('salary_slips')
+  //           .select('*')
+  //           .eq('employee_id', profile.employee_id)
+  //           .order('year', { ascending: false })
+  //           .order('month', { ascending: false });
+  //         if (data) setMySalarySlips(data);
+  //       } else {
+  //         setMySalarySlips([]);
+  //       }
+  //     } else {
+  //       setMySalarySlips([]);
+  //     }
+  //   };
+  //   fetchMySalarySlips();
+  // }, [employee]);
+
+  useEffect(() => {
+  const fetchMySalarySlips = async () => {
+    if (employee?.role === 'employee') {
+      // Get employee_id from profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('employee_id')
+        .eq('id', employee.id)
+        .single();
+      if (!profileError && profile?.employee_id) {
+        setProfileEmployeeId(profile.employee_id);
+        // Fetch salary slips for this employee_id
+        const { data, error } = await supabase
+          .from('salary_slips')
+          .select('*')
+          .eq('employee_id', profile.employee_id)
+          .order('year', { ascending: false })
+          .order('month', { ascending: false });
+        if (data) setMySalarySlips(data);
+      } else {
+        setMySalarySlips([]);
+      }
+    } else if (employee?.role === 'admin') {
+      // Admin: fetch all salary slips
+      const { data, error } = await supabase
+        .from('salary_slips')
+        .select('*')
+        .order('year', { ascending: false })
+        .order('month', { ascending: false });
+      if (data) setMySalarySlips(data);
+    } else {
+      setMySalarySlips([]);
+    }
+  };
+  fetchMySalarySlips();
+}, [employee]);
+
+  // Update userSalarySlips count whenever mySalarySlips changes
+  useEffect(() => {
+    if (employee?.role === 'employee') {
+      setStats(prev => ({ ...prev, userSalarySlips: mySalarySlips.length }));
+    }
+  }, [mySalarySlips, employee]);
+
   const fetchStats = async () => {
     try {
       // Fetch total employees
       const { count: employeeCount } = await supabase
-        .from('profiles')
+        .from('employees')
         .select('*', { count: 'exact', head: true });
 
       // Fetch total salary slips
       const { count: salarySlipCount } = await supabase
         .from('salary_slips')
         .select('*', { count: 'exact', head: true });
-
-      // Fetch user's salary slips
-      const { count: userSlipCount } = await supabase
-        .from('salary_slips')
-        .select('*', { count: 'exact', head: true })
-        .eq('employee_id', employee?.id);
-
+console.log('Employee count:', employeeCount);
       // Fetch unique departments
       const { data: departmentData } = await supabase
         .from('profiles')
@@ -46,18 +154,67 @@ const DashboardHome: React.FC = () => {
 
       const uniqueDepartments = new Set(departmentData?.map(d => d.department)).size;
 
-      setStats({
+      // Fetch user salary slip count (for employees)
+      let userSalarySlips = 0;
+      if (employee?.role === 'employee') {
+        // Get employee_id from profile
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('employee_id')
+          .eq('id', employee.id)
+          .single();
+        if (!profileError && profile?.employee_id) {
+          console.log('Fetching salary slips for employee_id:', profile.employee_id);
+          const { count: userSlipCount } = await supabase
+            .from('salary_slips')
+            .select('*', { count: 'exact', head: true })
+            .eq('employee_id', profile.employee_id);
+            console.log('User salary slip count:', userSlipCount);
+          userSalarySlips = userSlipCount || 0;
+        }
+      }
+
+      setStats(prev => ({
+        ...prev,
         totalEmployees: employeeCount || 0,
         totalSalarySlips: salarySlipCount || 0,
-        userSalarySlips: userSlipCount || 0,
-        departments: uniqueDepartments
-      });
+        departments: uniqueDepartments,
+        userSalarySlips
+      }));
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Generate signed URLs for all salary slips when mySalarySlips changes
+  useEffect(() => {
+    const generateSignedUrls = async () => {
+      if (!mySalarySlips.length) return;
+      const urls: { [id: string]: string } = {};
+      for (const slip of mySalarySlips) {
+        // Extract the storage path from file_url
+        // file_url example: .../salary-slips/<folder>/<year>/<file>
+        const match = slip.file_url.match(/salary-slips\/(.*)$/);
+        const path = match ? match[1] : '';
+        if (path) {
+          const { data, error } = await supabase.storage
+            .from('salary-slips')
+            .createSignedUrl(path, 60 * 60); // 1 hour expiry
+          if (data?.signedUrl) {
+            urls[slip.id] = data.signedUrl;
+          } else {
+            urls[slip.id] = '';
+          }
+        } else {
+          urls[slip.id] = '';
+        }
+      }
+      setSignedUrls(urls);
+    };
+    generateSignedUrls();
+  }, [mySalarySlips]);
 
   const dashboardStats = [
     {
@@ -94,13 +251,37 @@ const DashboardHome: React.FC = () => {
     },
     {
       title: 'This Month',
-      value: 'December 2024',
+      value: currentMonth && currentYear ? `${currentMonth} ${currentYear}` : '',
       description: 'Current period',
       icon: CalendarDays,
       color: 'bg-orange-500',
       show: true
     }
   ].filter(stat => stat.show);
+
+  // Get unique years from salary slips
+  const uniqueYears = Array.from(new Set(mySalarySlips.map(s => s.year))).sort((a, b) => b - a);
+  // Get unique months from salary slips (handle both numbers and names)
+  const numericMonths = mySalarySlips.map(s => typeof s.month === 'number' ? s.month : monthNames.indexOf(s.month) + 1).filter(m => m > 0);
+  const uniqueMonthNumbers = Array.from(new Set(numericMonths)).sort((a, b) => a - b);
+  const uniqueMonths = uniqueMonthNumbers.map(m => monthNames[m - 1]);
+
+  // Set default filter to current month/year when salary slips load
+  useEffect(() => {
+    if (mySalarySlips.length > 0 && currentMonth && currentYear) {
+      setFilterMonth(currentMonth);
+      setFilterYear(currentYear);
+    }
+  }, [mySalarySlips, currentMonth, currentYear]);
+
+  // Filtered slips
+  const filteredSlips = mySalarySlips.filter(slip => {
+    const slipMonthName = typeof slip.month === 'number' ? monthNames[slip.month - 1] : slip.month;
+    return (
+      (!filterYear || slip.year.toString() === filterYear) &&
+      (!filterMonth || slipMonthName === filterMonth)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -201,6 +382,77 @@ const DashboardHome: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Show employee's salary slips if logged in as employee */}
+      {employee?.role === 'employee' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your Salary Slips</CardTitle>
+            <CardDescription>Download your salary slips for each month</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Current month slip prominently displayed */}
+            {(() => {
+              const now = new Date();
+              const currentMonthName = monthNames[now.getMonth()];
+              const currentYearNum = now.getFullYear();
+              const currentSlip = mySalarySlips.find(slip => {
+                const slipMonthName = typeof slip.month === 'number' ? monthNames[slip.month - 1] : slip.month;
+                return slipMonthName === currentMonthName && slip.year === currentYearNum;
+              });
+              return currentSlip ? (
+                <div className="mb-6 p-4 border-2 border-green-500 rounded-lg bg-green-50 flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-lg text-green-700">Current Month Slip</div>
+                    <div className="text-md">{currentMonthName} {currentYearNum}</div>
+                  </div>
+                  {signedUrls[currentSlip.id] ? (
+                    <a
+                      href={signedUrls[currentSlip.id]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-700 font-bold underline"
+                      download={currentSlip.file_name}
+                    >
+                      Download
+                    </a>
+                  ) : (
+                    <span className="text-gray-400">No file</span>
+                  )}
+                </div>
+              ) : null;
+            })()}
+
+            {/* All 12 months grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {monthNames.map((month, idx) => {
+                const slip = mySalarySlips.find(slip => {
+                  const slipMonthName = typeof slip.month === 'number' ? monthNames[slip.month - 1] : slip.month;
+                  return slipMonthName === month && slip.year === new Date().getFullYear();
+                });
+                return (
+                  <div key={month} className="p-4 border rounded flex items-center justify-between bg-white">
+                    <span className="font-medium">{month} {new Date().getFullYear()}</span>
+                    {slip && signedUrls[slip.id] ? (
+                      <a
+                        href={signedUrls[slip.id]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                        download={slip.file_name}
+                      >
+                        Download
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">No file</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

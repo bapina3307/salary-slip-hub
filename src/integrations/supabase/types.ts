@@ -9,7 +9,78 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      employees: {
+        Row: {
+          id: string
+          employee_code: string | null
+          Name: string | null
+          phone: string | null
+          address: string | null
+            
+          status: 'active' | 'inactive' | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          employee_code?: string | null
+          Name?: string | null
+          phone?: string | null
+          address?: string | null
+         status?: 'active' | 'inactive' | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          employee_code?: string | null
+          Name?: string | null
+          phone?: string | null
+          address?: string | null
+        
+          status?: 'active' | 'inactive' | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      salary_slips: {
+        Row: {
+          id: string
+          employee_id: string | null
+          month: string
+          year: number
+          file_name: string
+          file_url: string
+          file_size: number | null
+          upload_date: string | null
+          uploaded_by: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          employee_id?: string | null
+          month: string
+          year: number
+          file_name: string
+          file_url: string
+          file_size?: number | null
+          upload_date?: string | null
+          uploaded_by?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          employee_id?: string | null
+          month?: string
+          year?: number
+          file_name?: string
+          file_url?: string
+          file_size?: number | null
+          upload_date?: string | null
+          uploaded_by?: string | null
+          created_at?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -37,7 +108,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
@@ -130,6 +201,31 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export type EmployeeData = {
+  id: string;
+  employee_code: string | null;
+  Name: string | null;
+  phone: string | null;
+  address: string | null;
+   
+  status: 'active' | 'inactive' | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type SalarySlipRow = {
+  id: string;
+  employee_id: string | null;
+  month: string;
+  year: number;
+  file_name: string;
+  file_url: string;
+  file_size: number | null;
+  upload_date: string | null;
+  uploaded_by: string | null;
+  created_at: string | null;
+};
 
 export const Constants = {
   public: {

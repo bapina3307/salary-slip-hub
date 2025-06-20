@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -7,36 +6,82 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { SalarySlip, Employee } from '../../types';
+import { SalarySlip } from '../../types';
 import { Upload, Download, FileText, Calendar, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 
+// Add a local type for joined salary slip with employees
+interface SalarySlipWithEmployee extends SalarySlip {
+  employees?: {
+    Name?: string | null;
+    employee_code?: string | null;
+  };
+}
+
 const SalarySlipsPage: React.FC = () => {
   const { employee } = useAuth();
-  const [salarySlips, setSalarySlips] = useState<SalarySlip[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [filteredSlips, setFilteredSlips] = useState<SalarySlip[]>([]);
+  // Use correct keys for employees from Supabase
+  const [employees, setEmployees] = useState<{ id: string; Name: string | null; employee_code: string | null }[]>([]);
+  const [salarySlips, setSalarySlips] = useState<SalarySlipWithEmployee[]>([]);
+  const [filteredSlips, setFilteredSlips] = useState<SalarySlipWithEmployee[]>([]);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchData = async () => {
+      let empId = null;
+      if (employee?.role === 'employee') {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('employee_id')
+          .eq('id', employee.id)
+          .single();
+        empId = profile?.employee_id || null;
+        setProfileEmployeeId(empId);
+        console.log('Employee profile employee_id:', empId, 'profile:', profile, 'error:', error);
+      }
+      // Fetch salary slips with joined employees
+      const { data: slipsData, error: slipsError } = await supabase
+        .from('salary_slips')
+        .select(`*, employees:employee_id (Name, employee_code)`)
+        .order('year', { ascending: false })
+        .order('month', { ascending: false });
+      console.log('Fetched salary slips:', slipsData, 'error:', slipsError);
+      if (slipsError) throw slipsError;
+      // Fetch employees (for admin)
+      if (employee?.role === 'admin') {
+        const { data: employeesData, error: employeesError } = await supabase
+          .from('employees')
+          .select('id, Name, employee_code')
+          .order('Name');
+        if (employeesError) throw employeesError;
+        setEmployees(employeesData || []);
+        console.log('Fetched employees:', employeesData, 'error:', employeesError);
+      }
+      setSalarySlips((slipsData as SalarySlipWithEmployee[]) || []);
+      // Filter slips based on user role
+      if (employee?.role === 'admin') {
+        setFilteredSlips((slipsData as SalarySlipWithEmployee[]) || []);
+      } else {
+        setFilteredSlips(((slipsData as SalarySlipWithEmployee[]) || []).filter(slip => slip.employee_id === empId));
+      }
+      setLoading(false);
+    };
     fetchData();
   }, [employee]);
 
   const fetchData = async () => {
     try {
-      // Fetch salary slips
+      // Fetch salary slips with joined employees
       const { data: slipsData, error: slipsError } = await supabase
         .from('salary_slips')
-        .select(`
-          *,
-          profiles!salary_slips_employee_id_fkey(name, email)
-        `)
+        .select(`*, employees:employee_id (Name, employee_code)`)
         .order('year', { ascending: false })
         .order('month', { ascending: false });
 
@@ -45,22 +90,20 @@ const SalarySlipsPage: React.FC = () => {
       // Fetch employees (for admin)
       if (employee?.role === 'admin') {
         const { data: employeesData, error: employeesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('role', 'employee')
-          .order('name');
+          .from('employees')
+          .select('id, Name, employee_code')
+          .order('Name');
 
         if (employeesError) throw employeesError;
         setEmployees(employeesData || []);
       }
 
-      setSalarySlips(slipsData || []);
-      
+      setSalarySlips((slipsData as SalarySlipWithEmployee[]) || []);
       // Filter slips based on user role
       if (employee?.role === 'admin') {
-        setFilteredSlips(slipsData || []);
+        setFilteredSlips((slipsData as SalarySlipWithEmployee[]) || []);
       } else {
-        setFilteredSlips((slipsData || []).filter(slip => slip.employee_id === employee?.id));
+        setFilteredSlips(((slipsData as SalarySlipWithEmployee[]) || []).filter(slip => slip.employee_id === employee?.id));
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -91,19 +134,15 @@ const SalarySlipsPage: React.FC = () => {
       // Create a unique file path
       const fileExt = uploadFile.name.split('.').pop();
       const fileName = `${selectedEmployee}/${selectedYear}/${selectedMonth}.${fileExt}`;
-      
       // Upload file to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('salary-slips')
-        .upload(fileName, uploadFile);
-
+        .upload(fileName, uploadFile, { upsert: true });
       if (uploadError) throw uploadError;
-
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('salary-slips')
         .getPublicUrl(fileName);
-
       // Insert salary slip record
       const { error: insertError } = await supabase
         .from('salary_slips')
@@ -115,18 +154,15 @@ const SalarySlipsPage: React.FC = () => {
           file_url: publicUrl,
           file_size: uploadFile.size,
           uploaded_by: employee?.id
+          // file_path removed
         });
-
       if (insertError) throw insertError;
-
       toast.success('Salary slip uploaded successfully!');
-      
       // Reset form
       setUploadFile(null);
       setSelectedMonth('');
       setSelectedYear('');
       setSelectedEmployee('');
-      
       // Refresh data
       fetchData();
     } catch (error) {
@@ -137,15 +173,19 @@ const SalarySlipsPage: React.FC = () => {
     }
   };
 
-  const handleDownload = async (slip: SalarySlip) => {
+  const handleDownload = async (slip: SalarySlipWithEmployee) => {
     try {
+      let filePath = slip.file_path || `${slip.employee_id}/${slip.year}/${slip.month}.pdf`;
+      if (filePath.startsWith('http')) {
+        const idx = filePath.indexOf('/salary-slips/');
+        if (idx !== -1) {
+          filePath = filePath.substring(idx + '/salary-slips/'.length);
+        }
+      }
       const { data, error } = await supabase.storage
         .from('salary-slips')
-        .download(slip.file_url.split('/').pop() || '');
-
+        .download(filePath);
       if (error) throw error;
-
-      // Create download link
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
@@ -154,7 +194,6 @@ const SalarySlipsPage: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
       toast.success(`Downloaded ${slip.file_name}`);
     } catch (error) {
       console.error('Download error:', error);
@@ -162,12 +201,25 @@ const SalarySlipsPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    let slips = salarySlips;
+    if (employee?.role !== 'admin') {
+      slips = slips.filter(slip => slip.employee_id === profileEmployeeId);
+    }
+    if (selectedMonth) {
+      slips = slips.filter(slip => slip.month === selectedMonth);
+    }
+    if (selectedYear) {
+      slips = slips.filter(slip => String(slip.year) === selectedYear);
+    }
+    setFilteredSlips(slips);
+  }, [salarySlips, employee, profileEmployeeId, selectedMonth, selectedYear]);
+
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
-
-  const years = ['2024', '2023', '2022'];
+  const years = ['2025', '2026', '2027'];
 
   if (loading) {
     return (
@@ -213,7 +265,7 @@ const SalarySlipsPage: React.FC = () => {
                   <SelectContent>
                     {employees.map(emp => (
                       <SelectItem key={emp.id} value={emp.id}>
-                        {emp.name}
+                        {emp.Name} ({emp.employee_code})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -280,6 +332,41 @@ const SalarySlipsPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Add filter controls above the salary slips list */}
+      <div className="flex flex-wrap gap-4 items-center mb-4">
+        <div>
+          <Label htmlFor="filter-month">Month</Label>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="All Months" />
+            </SelectTrigger>
+            <SelectContent>
+              {months.map(month => (
+                <SelectItem key={month} value={month}>{month}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="filter-year">Year</Label>
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-24">
+              <SelectValue placeholder="All Years" />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map(year => (
+                <SelectItem key={year} value={year}>{year}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {(selectedMonth || selectedYear) && (
+          <Button variant="outline" onClick={() => { setSelectedMonth(''); setSelectedYear(''); }}>
+            Clear Filters
+          </Button>
+        )}
+      </div>
+
       {/* Salary Slips List */}
       <Card>
         <CardHeader>
@@ -306,43 +393,36 @@ const SalarySlipsPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredSlips.map((slip) => {
-                  const employeeName = (slip as any).profiles?.name || 'Unknown';
-                  
-                  return (
-                    <Card key={slip.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-5 w-5 text-red-500" />
-                            <span className="font-medium">{slip.month} {slip.year}</span>
-                          </div>
-                          <Badge variant="outline">PDF</Badge>
+                {filteredSlips.map((slip) => (
+                  <Card key={slip.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-red-500" />
+                          <span className="font-medium">{slip.month} {slip.year}</span>
                         </div>
-                        
-                        {employee?.role === 'admin' && (
-                          <div className="text-sm text-gray-600">
-                            <p><strong>Employee:</strong> {employeeName}</p>
-                          </div>
-                        )}
-                        
+                        <Badge variant="outline">PDF</Badge>
+                      </div>
+                      {employee?.role === 'admin' && (
                         <div className="text-sm text-gray-600">
-                          <p><strong>File:</strong> {slip.file_name}</p>
-                          <p><strong>Uploaded:</strong> {new Date(slip.upload_date).toLocaleDateString()}</p>
+                          <p><strong>Employee:</strong> {slip.employees?.Name} ({slip.employees?.employee_code})</p>
                         </div>
-                        
-                        <Button 
-                          size="sm" 
-                          className="w-full flex items-center gap-2"
-                          onClick={() => handleDownload(slip)}
-                        >
-                          <Download className="h-4 w-4" />
-                          Download
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                      )}
+                      <div className="text-sm text-gray-600">
+                        <p><strong>File:</strong> {slip.file_name}</p>
+                        <p><strong>Uploaded:</strong> {new Date(slip.upload_date).toLocaleDateString()}</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="w-full flex items-center gap-2"
+                        onClick={() => handleDownload(slip)}
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
           </div>

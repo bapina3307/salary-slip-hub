@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -73,8 +72,15 @@ const EmployeesPage: React.FC = () => {
       }
       
       console.log('Fetched employees:', data);
-      setEmployees(data);
-      setFilteredEmployees(data);
+      
+      // Type-cast the data to ensure proper typing
+      const typedEmployees = data.map(emp => ({
+        ...emp,
+        status: emp.status as 'active' | 'inactive'
+      }));
+      
+      setEmployees(typedEmployees);
+      setFilteredEmployees(typedEmployees);
       toast.success('Employees loaded successfully');
       
     } catch (error) {
@@ -111,6 +117,7 @@ const EmployeesPage: React.FC = () => {
     try {
       const newEmployee: EmployeeData = {
         id: uuidv4(),
+        profile_id: '',
         employee_code: addForm.employee_code,
         Name: addForm.Name,
         phone: addForm.phone || '',
@@ -171,8 +178,6 @@ const EmployeesPage: React.FC = () => {
     setEditLoading(true);
     
     try {
-       
-
       const { data, error } = await supabase
         .from('employees')
         .update({
@@ -192,11 +197,17 @@ const EmployeesPage: React.FC = () => {
         return;
       }
 
+      // Type-cast the updated data
+      const updatedEmployee = {
+        ...data[0],
+        status: data[0].status as 'active' | 'inactive'
+      };
+
       setEmployees(prev => 
-        prev.map(emp => emp.id === editModal.employee?.id ? data[0] : emp)
+        prev.map(emp => emp.id === editModal.employee?.id ? updatedEmployee : emp)
       );
       setFilteredEmployees(prev => 
-        prev.map(emp => emp.id === editModal.employee?.id ? data[0] : emp)
+        prev.map(emp => emp.id === editModal.employee?.id ? updatedEmployee : emp)
       );
       
       toast.success('Employee updated successfully!');
@@ -224,15 +235,12 @@ const EmployeesPage: React.FC = () => {
     setDeleteLoading(true);
     
     try {
-       
-      
       const { error } = await supabase
         .from('employees')
         .delete()
         .eq('id', deleteModal.employee.id);
         
       if (error) throw error;
-       
 
       setEmployees(prev => prev.filter(emp => emp.id !== deleteModal.employee?.id));
       setFilteredEmployees(prev => prev.filter(emp => emp.id !== deleteModal.employee?.id));

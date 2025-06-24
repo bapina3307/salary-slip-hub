@@ -1,3 +1,4 @@
+
 export interface Employee {
   id: string;
   email: string;
@@ -14,6 +15,7 @@ export interface EmployeeData {
   id: string;
   profile_id: string;
   employee_code?: string;
+  Name?: string; // This matches the database column name
   phone?: string;
   address?: string;
   salary?: number;

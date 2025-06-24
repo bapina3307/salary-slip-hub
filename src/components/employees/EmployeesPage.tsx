@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
-import { EmployeeData } from '../../integrations/supabase/types';
+import { EmployeeData } from '../../types';
 import { Search, Plus, Mail, Trash2 } from 'lucide-react';
 import { supabase } from '../../integrations/supabase/client';
 import { toast } from 'sonner';

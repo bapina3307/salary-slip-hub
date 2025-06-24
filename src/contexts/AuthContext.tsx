@@ -36,7 +36,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       console.log('Fetched profile:', data);
       
-      return data;
+      // Type-safe conversion to Employee interface
+      const employeeData: Employee = {
+        id: data.id,
+        email: data.email,
+        name: data.name,
+        role: data.role as 'admin' | 'employee', // Type assertion for role
+        department: data.department,
+        position: data.position,
+        join_date: data.join_date,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      };
+      
+      return employeeData;
       
     } catch (error) {
       console.error('Error fetching profile:', error);

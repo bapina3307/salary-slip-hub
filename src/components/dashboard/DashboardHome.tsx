@@ -36,7 +36,7 @@ const DashboardHome: React.FC = () => {
         .order('month', { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
-        console.log('Fetched current period:', data[0]);
+        
         setCurrentMonth(data[0].month);
         setCurrentYear(data[0].year.toString());
       } else {
@@ -145,7 +145,7 @@ const DashboardHome: React.FC = () => {
       const { count: salarySlipCount } = await supabase
         .from('salary_slips')
         .select('*', { count: 'exact', head: true });
-console.log('Employee count:', employeeCount);
+ 
       // Fetch unique departments
       const { data: departmentData } = await supabase
         .from('profiles')
@@ -164,12 +164,10 @@ console.log('Employee count:', employeeCount);
           .eq('id', employee.id)
           .single();
         if (!profileError && profile?.employee_id) {
-          console.log('Fetching salary slips for employee_id:', profile.employee_id);
           const { count: userSlipCount } = await supabase
             .from('salary_slips')
             .select('*', { count: 'exact', head: true })
             .eq('employee_id', profile.employee_id);
-            console.log('User salary slip count:', userSlipCount);
           userSalarySlips = userSlipCount || 0;
         }
       }

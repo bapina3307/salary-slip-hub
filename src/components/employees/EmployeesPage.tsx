@@ -71,7 +71,6 @@ const EmployeesPage: React.FC = () => {
         return;
       }
       
-      console.log('Fetched employees:', data);
       setEmployees(data);
       setFilteredEmployees(data);
       toast.success('Employees loaded successfully');

@@ -33,7 +33,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
       if (error) throw error;
-      console.log('Fetched profile:', data); // Debug log
       
       return data;
       

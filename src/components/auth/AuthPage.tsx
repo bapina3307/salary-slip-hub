@@ -49,7 +49,7 @@ const AuthPage: React.FC = () => {
     if (error) {
       console.error('Error fetching employees:', error);
     }
-    console.log('Fetched employees:', data);
+    
     if (data) setEmployees(data);
   };
 

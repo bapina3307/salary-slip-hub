@@ -44,7 +44,6 @@ const SalarySlipsPage: React.FC = () => {
           .single();
         empId = profile?.employee_id || null;
         setProfileEmployeeId(empId);
-        console.log('Employee profile employee_id:', empId, 'profile:', profile, 'error:', error);
       }
       // Fetch salary slips with joined employees
       const { data: slipsData, error: slipsError } = await supabase
@@ -52,7 +51,6 @@ const SalarySlipsPage: React.FC = () => {
         .select(`*, employees:employee_id (Name, employee_code)`)
         .order('year', { ascending: false })
         .order('month', { ascending: false });
-      console.log('Fetched salary slips:', slipsData, 'error:', slipsError);
       if (slipsError) throw slipsError;
       // Fetch employees (for admin)
       if (employee?.role === 'admin') {
@@ -62,7 +60,6 @@ const SalarySlipsPage: React.FC = () => {
           .order('Name');
         if (employeesError) throw employeesError;
         setEmployees(employeesData || []);
-        console.log('Fetched employees:', employeesData, 'error:', employeesError);
       }
       setSalarySlips((slipsData as SalarySlipWithEmployee[]) || []);
       // Filter slips based on user role

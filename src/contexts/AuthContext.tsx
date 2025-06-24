@@ -31,13 +31,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
-        .single();
+        .eq('id', userId)        .single();
       if (error) throw error;
-<<<<<<< HEAD
-=======
-      console.log('Fetched profile:', data);
->>>>>>> c73888b4cd1229f98ac470cb416b3f05a5f8b10b
       
       // Type-safe conversion to Employee interface
       const employeeData: Employee = {

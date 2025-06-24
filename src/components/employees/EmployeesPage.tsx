@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
-import { EmployeeData } from '../../integrations/supabase/types';
+import { EmployeeData } from '../../types';
 import { Search, Plus, Mail, Trash2 } from 'lucide-react';
 import { supabase } from '../../integrations/supabase/client';
 import { toast } from 'sonner';
@@ -71,8 +71,21 @@ const EmployeesPage: React.FC = () => {
         return;
       }
       
+<<<<<<< HEAD
       setEmployees(data);
       setFilteredEmployees(data);
+=======
+      console.log('Fetched employees:', data);
+      
+      // Type-cast the data to ensure proper typing
+      const typedEmployees = data.map(emp => ({
+        ...emp,
+        status: emp.status as 'active' | 'inactive'
+      }));
+      
+      setEmployees(typedEmployees);
+      setFilteredEmployees(typedEmployees);
+>>>>>>> c73888b4cd1229f98ac470cb416b3f05a5f8b10b
       toast.success('Employees loaded successfully');
       
     } catch (error) {
@@ -109,6 +122,7 @@ const EmployeesPage: React.FC = () => {
     try {
       const newEmployee: EmployeeData = {
         id: uuidv4(),
+        profile_id: '',
         employee_code: addForm.employee_code,
         Name: addForm.Name,
         phone: addForm.phone || '',
@@ -169,8 +183,6 @@ const EmployeesPage: React.FC = () => {
     setEditLoading(true);
     
     try {
-       
-
       const { data, error } = await supabase
         .from('employees')
         .update({
@@ -190,11 +202,17 @@ const EmployeesPage: React.FC = () => {
         return;
       }
 
+      // Type-cast the updated data
+      const updatedEmployee = {
+        ...data[0],
+        status: data[0].status as 'active' | 'inactive'
+      };
+
       setEmployees(prev => 
-        prev.map(emp => emp.id === editModal.employee?.id ? data[0] : emp)
+        prev.map(emp => emp.id === editModal.employee?.id ? updatedEmployee : emp)
       );
       setFilteredEmployees(prev => 
-        prev.map(emp => emp.id === editModal.employee?.id ? data[0] : emp)
+        prev.map(emp => emp.id === editModal.employee?.id ? updatedEmployee : emp)
       );
       
       toast.success('Employee updated successfully!');
@@ -222,15 +240,12 @@ const EmployeesPage: React.FC = () => {
     setDeleteLoading(true);
     
     try {
-       
-      
       const { error } = await supabase
         .from('employees')
         .delete()
         .eq('id', deleteModal.employee.id);
         
       if (error) throw error;
-       
 
       setEmployees(prev => prev.filter(emp => emp.id !== deleteModal.employee?.id));
       setFilteredEmployees(prev => prev.filter(emp => emp.id !== deleteModal.employee?.id));

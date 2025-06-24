@@ -11,82 +11,158 @@ export type Database = {
     Tables: {
       employees: {
         Row: {
-          id: string
+          address: string | null
+          created_at: string | null
           employee_code: string | null
+          id: string
           Name: string | null
           phone: string | null
-          address: string | null
-            
-          status: 'active' | 'inactive' | null
-          created_at: string | null
+          profile_id: string | null
+          status: string | null
           updated_at: string | null
         }
         Insert: {
-          id?: string
+          address?: string | null
+          created_at?: string | null
           employee_code?: string | null
+          id?: string
           Name?: string | null
           phone?: string | null
-          address?: string | null
-         status?: 'active' | 'inactive' | null
-          created_at?: string | null
+          profile_id?: string | null
+          status?: string | null
           updated_at?: string | null
         }
         Update: {
-          id?: string
+          address?: string | null
+          created_at?: string | null
           employee_code?: string | null
+          id?: string
           Name?: string | null
           phone?: string | null
-          address?: string | null
-        
-          status?: 'active' | 'inactive' | null
-          created_at?: string | null
+          profile_id?: string | null
+          status?: string | null
           updated_at?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "employees_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          department: string | null
+          email: string
+          employee_id: string | null
+          id: string
+          join_date: string | null
+          name: string
+          position: string | null
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          department?: string | null
+          email: string
+          employee_id?: string | null
+          id: string
+          join_date?: string | null
+          name: string
+          position?: string | null
+          role: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department?: string | null
+          email?: string
+          employee_id?: string | null
+          id?: string
+          join_date?: string | null
+          name?: string
+          position?: string | null
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       salary_slips: {
         Row: {
-          id: string
+          created_at: string | null
           employee_id: string | null
-          month: string
-          year: number
           file_name: string
-          file_url: string
           file_size: number | null
+          file_url: string
+          id: string
+          month: string
           upload_date: string | null
           uploaded_by: string | null
-          created_at: string | null
+          year: number
         }
         Insert: {
-          id?: string
+          created_at?: string | null
           employee_id?: string | null
-          month: string
-          year: number
           file_name: string
-          file_url: string
           file_size?: number | null
+          file_url: string
+          id?: string
+          month: string
           upload_date?: string | null
           uploaded_by?: string | null
-          created_at?: string | null
+          year: number
         }
         Update: {
-          id?: string
+          created_at?: string | null
           employee_id?: string | null
-          month?: string
-          year?: number
           file_name?: string
-          file_url?: string
           file_size?: number | null
+          file_url?: string
+          id?: string
+          month?: string
           upload_date?: string | null
           uploaded_by?: string | null
-          created_at?: string | null
+          year?: number
         }
+        Relationships: [
+          {
+            foreignKeyName: "salary_slips_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "salary_slips_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_user_employee_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      is_admin: {
+        Args: Record<PropertyKey, never> | { user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -108,7 +184,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
@@ -201,31 +277,6 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export type EmployeeData = {
-  id: string;
-  employee_code: string | null;
-  Name: string | null;
-  phone: string | null;
-  address: string | null;
-   
-  status: 'active' | 'inactive' | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
-
-export type SalarySlipRow = {
-  id: string;
-  employee_id: string | null;
-  month: string;
-  year: number;
-  file_name: string;
-  file_url: string;
-  file_size: number | null;
-  upload_date: string | null;
-  uploaded_by: string | null;
-  created_at: string | null;
-};
 
 export const Constants = {
   public: {

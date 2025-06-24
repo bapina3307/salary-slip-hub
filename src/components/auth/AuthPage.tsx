@@ -25,8 +25,8 @@ const AuthPage: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    employeeId: '', // employee id from dropdown
-    employeeCode: '' // employee code from dropdown
+    employeeId: '',
+    employeeCode: ''
   });
 
   const [employees, setEmployees] = useState<{ id: string; Name: string; employee_code: string }[]>([]);
@@ -40,7 +40,6 @@ const AuthPage: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Fetch employees for dropdown
   const fetchEmployees = async () => {
     const { data, error } = await supabase
       .from('employees')
@@ -49,15 +48,14 @@ const AuthPage: React.FC = () => {
     if (error) {
       console.error('Error fetching employees:', error);
     }
-    
+    console.log('Fetched employees:', data);
     if (data) setEmployees(data);
   };
 
   useEffect(() => {
-    fetchEmployees(); // fetch on mount
+    fetchEmployees();
   }, []);
 
-  // Fetch employees every time signup tab is selected
   useEffect(() => {
     if (activeTab === 'signup') {
       fetchEmployees();
@@ -75,7 +73,7 @@ const AuthPage: React.FC = () => {
         toast.success('Login successful!');
         navigate('/dashboard');
       } else {
-        toast.error('Invalid credentials. Try: admin@company.com / password123');
+        toast.error('Invalid credentials. Try: admin@gmail.com / Admin@12');
       }
     } catch (error) {
       toast.error('Login failed. Please try again.');
@@ -96,20 +94,20 @@ const AuthPage: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      // 1. Sign up user
       const selectedEmployee = employees.find(emp => emp.id === signupForm.employeeId);
       if (!selectedEmployee) {
         toast.error('Selected employee not found.');
         setIsLoading(false);
         return;
       }
+      
       const success = await signup(signupForm.email, signupForm.password, selectedEmployee.Name || '');
       if (!success) {
         toast.error('Failed to create account');
         setIsLoading(false);
         return;
       }
-      // 2. Get the user id from Supabase auth
+      
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         toast.error('Could not get user after signup');
@@ -117,21 +115,20 @@ const AuthPage: React.FC = () => {
         return;
       }
       
-      // 3. Update profiles with employee_id and employee_code (do NOT insert)
-      const { error: profileError,data: updateData } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ employee_id: selectedEmployee.id })
         .eq('id', user.id);
         
       if (profileError) {
-        toast.error('Failed to link employee to profile');
-        setIsLoading(false);
-        return;
+        console.error('Profile update error:', profileError);
+        // Don't fail the signup for this error, just log it
       }
+      
       toast.success('Account created successfully!');
-      // Instead of reload, navigate to dashboard (let AuthContext refetch profile)
       navigate('/dashboard');
     } catch (error) {
+      console.error('Signup error:', error);
       toast.error('Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -245,7 +242,7 @@ const AuthPage: React.FC = () => {
                       const selected = employees.find(emp => emp.id === e.target.value);
                       setSignupForm({
                         ...signupForm,
-                        employeeId: e.target.value, // always set to employee.id
+                        employeeId: e.target.value,
                         employeeCode: selected?.employee_code || ''
                       });
                     }}
@@ -256,6 +253,11 @@ const AuthPage: React.FC = () => {
                       <option key={emp.id} value={emp.id}>{emp.Name}</option>
                     ))}
                   </select>
+                  {employees.length === 0 && (
+                    <p className="text-sm text-yellow-600">
+                      No employees found. Please contact administrator.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>

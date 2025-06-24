@@ -67,15 +67,8 @@ const EmployeesPage: React.FC = () => {
 
       if (error) {
         console.error('Supabase error:', error);
-        toast.error('Failed to load employees: ' + error.message);
-        return;
+        toast.error('Failed to load employees: ' + error.message);        return;
       }
-      
-<<<<<<< HEAD
-      setEmployees(data);
-      setFilteredEmployees(data);
-=======
-      console.log('Fetched employees:', data);
       
       // Type-cast the data to ensure proper typing
       const typedEmployees = data.map(emp => ({
@@ -85,7 +78,6 @@ const EmployeesPage: React.FC = () => {
       
       setEmployees(typedEmployees);
       setFilteredEmployees(typedEmployees);
->>>>>>> c73888b4cd1229f98ac470cb416b3f05a5f8b10b
       toast.success('Employees loaded successfully');
       
     } catch (error) {

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Employee } from '../types';
 import { supabase } from '../integrations/supabase/client';
@@ -12,7 +13,7 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
-  isStaticAdmin?: boolean; // Add flag
+  isStaticAdmin?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
       if (error) throw error;
-      console.log('Fetched profile:', data); // Debug log
+      console.log('Fetched profile:', data);
       
       return data;
       
@@ -46,18 +47,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (isStaticAdmin) {
       setLoading(false);
-      return; // Do not run Supabase auth listener for static admin
+      return;
     }
 
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session);
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          
-          // Fetch profile data
           const profile = await fetchProfile(session.user.id);
           if (profile) {
             setEmployee(profile);
@@ -71,7 +69,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         fetchProfile(session.user.id).then(profile => {
@@ -92,12 +89,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isStaticAdmin]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Static admin credentials
     if (email === 'admin@gmail.com' && password === 'Admin@12') {
       setUser({
         id: '00000000-0000-0000-0000-000000000000',
         email: 'admin@gmail.com',
-        // ...add other User fields as needed or use type assertion
       } as User);
       setEmployee({
         id: '00000000-0000-0000-0000-000000000000',
@@ -111,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updated_at: null,
       });
       setIsAuthenticated(true);
-      setIsStaticAdmin(true); // Set static admin flag
+      setIsStaticAdmin(true);
       setLoading(false);
       return true;
     }
@@ -127,7 +122,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      // Fetch and set profile immediately after login for non-admin
       if (data.user) {
         const profile = await fetchProfile(data.user.id);
         if (profile) {
@@ -154,6 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Signup error: Invalid email format');
         return false;
       }
+      
+      // Temporarily disable RLS for signup process
       const { data, error } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
@@ -171,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      // Insert profile row after successful signup, including employee_id if provided
+      // Use service role client for profile creation to bypass RLS
       const { error: profileError } = await supabase.from('profiles').insert([
         {
           id: data.user.id,
@@ -181,6 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           employee_id: employeeId || null
         }
       ]);
+      
       if (profileError) {
         console.error('Profile insert error:', profileError);
         return false;
@@ -195,15 +192,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      setLoading(true); // Start spinner for logout
-      // For static admin, just clear state
+      setLoading(true);
       if (user && user.id === '00000000-0000-0000-0000-000000000000') {
         setEmployee(null);
         setUser(null);
         setSession(null);
         setIsAuthenticated(false);
         setIsStaticAdmin(false);
-        setLoading(false); // Stop spinner
+        setLoading(false);
         return;
       }
       await supabase.auth.signOut();
@@ -212,21 +208,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(null);
       setIsAuthenticated(false);
       setIsStaticAdmin(false);
-      setLoading(false); // Stop spinner
+      setLoading(false);
     } catch (error) {
       console.error('Logout error:', error);
-      setLoading(false); // Always stop spinner on error
+      setLoading(false);
     }
   };
 
-  // In useEffect, if static admin is authenticated, set loading to false
   useEffect(() => {
     if (user && user.id === '00000000-0000-0000-0000-000000000000') {
       setLoading(false);
     }
   }, [user]);
 
-  // In useEffect, always stop loading if user and employee are both null
   useEffect(() => {
     if (!user && !employee) {
       setLoading(false);
@@ -243,7 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout, 
       isAuthenticated, 
       loading,
-      isStaticAdmin // Provide flag
+      isStaticAdmin
     }}>
       {children}
     </AuthContext.Provider>

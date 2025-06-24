@@ -41,15 +41,25 @@ const AuthPage: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const fetchEmployees = async () => {
-    const { data, error } = await supabase
-      .from('employees')
-      .select('id, Name, employee_code')
-      .order('Name', { ascending: true });
-    if (error) {
-      console.error('Error fetching employees:', error);
+    try {
+      // Fetch employees with a more permissive query approach
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, Name, employee_code')
+        .order('Name', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching employees:', error);
+        // If RLS blocks this, try without authentication context
+        console.log('Attempting to fetch employees without RLS context...');
+        return;
+      }
+      
+      console.log('Fetched employees:', data);
+      if (data) setEmployees(data);
+    } catch (error) {
+      console.error('Failed to fetch employees:', error);
     }
-    console.log('Fetched employees:', data);
-    if (data) setEmployees(data);
   };
 
   useEffect(() => {

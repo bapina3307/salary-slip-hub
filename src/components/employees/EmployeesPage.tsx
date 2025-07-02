@@ -114,7 +114,7 @@ const EmployeesPage: React.FC = () => {
     try {
       const newEmployee: EmployeeData = {
         id: uuidv4(),
-        profile_id: '',
+        profile_id: null,
         employee_code: addForm.employee_code,
         Name: addForm.Name,
         phone: addForm.phone || '',

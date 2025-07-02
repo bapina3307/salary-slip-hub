@@ -13,7 +13,7 @@ export interface Employee {
 
 export interface EmployeeData {
   id: string;
-  profile_id: string;
+  profile_id: string | null;
   employee_code?: string;
   Name?: string; // This matches the database column name
   phone?: string;

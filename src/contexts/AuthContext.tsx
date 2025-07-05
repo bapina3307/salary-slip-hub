@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Employee } from '../types';
 import { supabase } from '../integrations/supabase/client';
@@ -9,7 +8,6 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string, role?: 'admin' | 'employee', employeeId?: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
@@ -31,9 +29,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)        .single();
-      if (error) throw error;
-      
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+
+      if (!data) {
+        console.warn('No profile data found for user ID:', userId);
+        return null;
+      }
+
+      if (!data.role) {
+        console.warn('Role is missing in the fetched profile data for user ID:', userId);
+      }
+
       // Type-safe conversion to Employee interface
       const employeeData: Employee = {
         id: data.id,
@@ -56,72 +68,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (isStaticAdmin) {
-      setLoading(false);
-      return;
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session);
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
+    const handleSession = async (session: Session | null) => {
+      if (session?.user) {
+        if (!employee || employee.id !== session.user.id) {
           const profile = await fetchProfile(session.user.id);
           if (profile) {
             setEmployee(profile);
             setIsAuthenticated(true);
           }
-        } else {
-          setEmployee(null);
-          setIsAuthenticated(false);
         }
-        setLoading(false);
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchProfile(session.user.id).then(profile => {
-          if (profile) {
-            setEmployee(profile);
-            setSession(session);
-            setUser(session.user);
-            setIsAuthenticated(true);
-          }
-          setLoading(false);
-        });
       } else {
-        setLoading(false);
+        setEmployee(null);
+        setIsAuthenticated(false);
+      }
+      setLoading(false);
+    };
+
+    const unsubscribe = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        handleSession(session);
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [isStaticAdmin]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleSession(session);
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [employee]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    if (email === 'admin@gmail.com' && password === 'Admin@12') {
-      setUser({
-        id: '00000000-0000-0000-0000-000000000000',
-        email: 'admin@gmail.com',
-      } as User);
-      setEmployee({
-        id: '00000000-0000-0000-0000-000000000000',
-        email: 'admin@gmail.com',
-        name: 'Admin',
-        role: 'admin',
-        department: null,
-        position: null,
-        join_date: null,
-        created_at: null,
-        updated_at: null,
-      });
-      setIsAuthenticated(true);
-      setIsStaticAdmin(true);
-      setLoading(false);
-      return true;
-    }
-
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -146,57 +126,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error) {
       console.error('Login error:', error);
-      return false;
-    }
-  };
-
-  const signup = async (email: string, password: string, name: string, role: 'admin' | 'employee' = 'employee', employeeId?: string): Promise<boolean> => {
-    try {
-      const redirectUrl = `${window.location.origin}/`;
-      const trimmedEmail = email.trim();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(trimmedEmail)) {
-        console.error('Signup error: Invalid email format');
-        return false;
-      }
-      
-      // Temporarily disable RLS for signup process
-      const { data, error } = await supabase.auth.signUp({
-        email: trimmedEmail,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            name,
-            role
-          }
-        }
-      });
-
-      if (error || !data.user) {
-        console.error('Signup error:', error);
-        return false;
-      }
-
-      // Use service role client for profile creation to bypass RLS
-      const { error: profileError } = await supabase.from('profiles').insert([
-        {
-          id: data.user.id,
-          email: trimmedEmail,
-          name,
-          role,
-          employee_id: employeeId || null
-        }
-      ]);
-      
-      if (profileError) {
-        console.error('Profile insert error:', profileError);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Signup error:', error);
       return false;
     }
   };
@@ -244,7 +173,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user, 
       session, 
       login, 
-      signup, 
       logout, 
       isAuthenticated, 
       loading,

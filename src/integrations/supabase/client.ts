@@ -4,8 +4,12 @@ import type { Database } from './types';
 
 const SUPABASE_URL = "https://ubohogjzelswipuhlsjt.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVib2hvZ2p6ZWxzd2lwdWhsc2p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNTkwMTEsImV4cCI6MjA2NTYzNTAxMX0.m2PjBpDsojG0HKjY22UQUhynw-60l71yyRXni2B2KsI";
+const SUPABASE_SERVICE_ROLE_KEY = "your_service_role_key_here"; // Replace with your actual service role key
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+// Create a separate client for admin operations
+export const adminSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

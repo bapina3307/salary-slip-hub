@@ -10,6 +10,7 @@ import { supabase } from '../../integrations/supabase/client';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { v4 as uuidv4 } from 'uuid';
+import { Label } from '../ui/label';
 
 const EmployeesPage: React.FC = () => {
   const { employee: currentUser } = useAuth();

@@ -7,7 +7,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { SalarySlip } from '../../types';
-import { Upload, Download, FileText, Calendar, Search } from 'lucide-react';
+import { Upload, Download, FileText, Calendar, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
 
@@ -32,6 +32,7 @@ const SalarySlipsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null);
+  const [deletingSlipId, setDeletingSlipId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -195,6 +196,52 @@ const SalarySlipsPage: React.FC = () => {
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Failed to download file');
+    }
+  };
+
+  const handleDelete = async (slip: SalarySlipWithEmployee) => {
+    if (!confirm(`Are you sure you want to delete the salary slip for ${slip.employees?.Name} (${slip.month} ${slip.year})?`)) {
+      return;
+    }
+
+    setDeletingSlipId(slip.id);
+
+    try {
+      // Delete file from storage
+      let filePath = slip.file_path || `${slip.employee_id}/${slip.year}/${slip.month}.pdf`;
+      if (filePath.startsWith('http')) {
+        const idx = filePath.indexOf('/salary-slips/');
+        if (idx !== -1) {
+          filePath = filePath.substring(idx + '/salary-slips/'.length);
+        }
+      }
+
+      const { error: storageError } = await supabase.storage
+        .from('salary-slips')
+        .remove([filePath]);
+
+      if (storageError) {
+        console.warn('Failed to delete file from storage:', storageError);
+        // Continue with database deletion even if storage deletion fails
+      }
+
+      // Delete record from database
+      const { error: dbError } = await supabase
+        .from('salary_slips')
+        .delete()
+        .eq('id', slip.id);
+
+      if (dbError) throw dbError;
+
+      toast.success('Salary slip deleted successfully');
+      
+      // Refresh data
+      fetchData();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Failed to delete salary slip');
+    } finally {
+      setDeletingSlipId(null);
     }
   };
 
@@ -409,14 +456,28 @@ const SalarySlipsPage: React.FC = () => {
                         <p><strong>File:</strong> {slip.file_name}</p>
                         <p><strong>Uploaded:</strong> {new Date(slip.upload_date).toLocaleDateString()}</p>
                       </div>
-                      <Button 
-                        size="sm" 
-                        className="w-full flex items-center gap-2"
-                        onClick={() => handleDownload(slip)}
-                      >
-                        <Download className="h-4 w-4" />
-                        Download
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          className="flex-1 flex items-center gap-2"
+                          onClick={() => handleDownload(slip)}
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                        {employee?.role === 'admin' && (
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            className="flex items-center gap-2"
+                            onClick={() => handleDelete(slip)}
+                            disabled={deletingSlipId === slip.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {deletingSlipId === slip.id ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}

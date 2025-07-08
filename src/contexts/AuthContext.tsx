@@ -84,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     };
 
-    const unsubscribe = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         handleSession(session);
       }
@@ -95,9 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      subscription.unsubscribe();
     };
   }, [employee]);
 
